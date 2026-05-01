@@ -1,0 +1,8 @@
+ALTER TABLE "payout_requests"
+ALTER COLUMN "account_number" DROP NOT NULL,
+ALTER COLUMN "ifsc_code" DROP NOT NULL,
+ALTER COLUMN "bank_name" DROP NOT NULL;
+
+ALTER TABLE "payout_requests"
+ADD COLUMN IF NOT EXISTS "payout_method" TEXT NOT NULL DEFAULT 'BANK',
+ADD COLUMN IF NOT EXISTS "upi_id" TEXT;

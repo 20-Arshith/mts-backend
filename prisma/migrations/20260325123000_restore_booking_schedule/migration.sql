@@ -1,0 +1,2 @@
+ALTER TABLE "bookings"
+ADD COLUMN IF NOT EXISTS "scheduled_at" TIMESTAMP(3);
