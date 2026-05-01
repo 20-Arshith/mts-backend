@@ -56,22 +56,6 @@ Expected response:
 }
 ```
 
-## Production With PM2
-
-```bash
-npm install -g pm2
-pm2 start src/index.js --name mts-backend
-pm2 save
-pm2 startup
-```
-
-Useful commands:
-
-```bash
-pm2 logs mts-backend
-pm2 restart mts-backend
-pm2 status
-```
 
 ## Self-Registration Flow
 
