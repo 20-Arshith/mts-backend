@@ -3,9 +3,15 @@ const authRepository = require("../repositories/auth.repository")
 const userRepository = require('../repositories/user.repository');
 const vendorRepository = require('../repositories/vendor.repository');
 const agentRepository = require('../repositories/agent.repository');
+const serviceCategoryRepository = require('../repositories/service-category.repository');
 const { ROLES } = require('../utils/constants');
 const logger = require('../utils/logger');
-const { createValidationError } = require('../utils/validation');
+const {
+    createConflictError,
+    createValidationError,
+    validateAgentOnboardingInput,
+    validateVendorRegistrationInput,
+} = require('../utils/validation');
 
 const PLACEHOLDER_USER_NAME = 'User';
 
@@ -187,17 +193,13 @@ exports.registerVendor = async (data) => {
         whatsapp_number,
         description,
         categories = []
-    } = data;
+    } = validateVendorRegistrationInput(data);
 
-    const normalizedMobile = mobile?.trim() || null;
-    const normalizedEmail = email?.trim() || null;
-    const normalizedWhatsapp = (whatsapp_number?.trim() || normalizedMobile || null);
-    const normalizedAgentCode = agent_code?.trim().toUpperCase() || null;
+    const normalizedMobile = mobile;
+    const normalizedEmail = email;
+    const normalizedWhatsapp = whatsapp_number;
+    const normalizedAgentCode = agent_code;
     const primaryContact = normalizedMobile || normalizedEmail;
-
-    if (!primaryContact) {
-        throw new Error('Mobile number or email is required');
-    }
 
     // 1. Check if user already exists
     let user = await userRepository.findByContact(primaryContact);
@@ -206,11 +208,21 @@ exports.registerVendor = async (data) => {
     const agent = normalizedAgentCode ? await exports.validateAgentReferralCode(normalizedAgentCode) : null;
     const vendorApprovalStatus = agent ? 'approved' : 'pending';
 
+    if (categories.length > 0) {
+        const categoryRecords = await Promise.all(
+            categories.map((categoryId) => serviceCategoryRepository.findById(categoryId, 'category_id'))
+        );
+        const missingCategory = categoryRecords.findIndex((category) => !category);
+        if (missingCategory !== -1) {
+            throw createValidationError('Selected service category does not exist');
+        }
+    }
+
     // 3. Create or Update user with Vendor role
     if (!user) {
         user = await userRepository.model.create({
             data: {
-                full_name: 'Vendor User',
+                full_name,
                 mobile: normalizedMobile,
                 email: normalizedEmail,
                 role_id: ROLES.VENDOR,
@@ -221,6 +233,7 @@ exports.registerVendor = async (data) => {
         user = await userRepository.model.update({
             where: { user_id: user.user_id },
             data: {
+                full_name,
                 ...(normalizedMobile ? { mobile: normalizedMobile } : {}),
                 ...(normalizedEmail ? { email: normalizedEmail } : {}),
                 role_id: ROLES.VENDOR,
@@ -233,32 +246,32 @@ exports.registerVendor = async (data) => {
         where: { vendor_id: user.user_id },
         update: {
             agent_id: agent ? agent.agent_id : null,
-            category_id: Array.isArray(categories) && categories.length > 0 ? parseInt(categories[0], 10) : null,
+            category_id: categories.length > 0 ? categories[0] : null,
             business_name,
             owner_name: full_name,
             mobile: normalizedMobile,
             email: normalizedEmail,
             whatsapp_number: normalizedWhatsapp,
-            description: description || null,
+            description,
             address,
-            latitude: latitude ? parseFloat(latitude) : null,
-            longitude: longitude ? parseFloat(longitude) : null,
+            latitude,
+            longitude,
             is_available: false,
             approval_status: vendorApprovalStatus
         },
         create: {
             vendor_id: user.user_id,
             agent_id: agent ? agent.agent_id : null,
-            category_id: Array.isArray(categories) && categories.length > 0 ? parseInt(categories[0], 10) : null,
+            category_id: categories.length > 0 ? categories[0] : null,
             business_name,
             owner_name: full_name,
             mobile: normalizedMobile,
             email: normalizedEmail,
             whatsapp_number: normalizedWhatsapp,
-            description: description || null,
+            description,
             address,
-            latitude: latitude ? parseFloat(latitude) : null,
-            longitude: longitude ? parseFloat(longitude) : null,
+            latitude,
+            longitude,
             is_available: false,
             approval_status: vendorApprovalStatus
         },
@@ -270,7 +283,7 @@ exports.registerVendor = async (data) => {
         }
     });
 
-    if (Array.isArray(categories) && categories.length > 0) {
+    if (categories.length > 0) {
         await vendorRepository.model.update({
             where: { vendor_id: vendor.vendor_id },
             data: {
@@ -279,7 +292,7 @@ exports.registerVendor = async (data) => {
                         service_title: 'General Service'
                     },
                     create: categories.map((categoryId) => ({
-                        category_id: parseInt(categoryId, 10),
+                        category_id: categoryId,
                         service_title: 'General Service',
                         approval_status: 'pending',
                         status: 'pending',
@@ -318,29 +331,20 @@ async function generateUniqueReferralCode() {
 }
 
 exports.registerAgent = async (data) => {
-    const { mobile, full_name, email } = data;
-    
-    // We reuse the basic logic:
-    const normalizedMobile = mobile?.trim() || null;
-    const normalizedFullName = full_name?.trim() || null;
-    const normalizedEmail = email?.trim() || null;
+    const {
+        mobile: normalizedMobile,
+        full_name: normalizedFullName,
+        email: normalizedEmail,
+    } = validateAgentOnboardingInput(data);
 
-    if (!normalizedMobile) {
-        throw new Error('Mobile number is required');
-    }
-    
-    if (!normalizedFullName) {
-        throw new Error('Full name is required');
-    }
-
-    const existingMobile = await agentRepository.findByContact(normalizedMobile);
+    const existingMobile = normalizedMobile ? await agentRepository.findByContact(normalizedMobile) : null;
     if (existingMobile) {
-        throw new Error('An agent with this phone number already exists');
+        throw createConflictError('An agent with this phone number already exists');
     }
 
     const existingEmail = normalizedEmail ? await agentRepository.findByContact(normalizedEmail) : null;
     if (existingEmail) {
-        throw new Error('An agent with this email already exists');
+        throw createConflictError('An agent with this email already exists');
     }
 
     const referralCode = await generateUniqueReferralCode();

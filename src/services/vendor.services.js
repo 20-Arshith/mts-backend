@@ -191,9 +191,24 @@ exports.updateServiceAvailability = async (serviceId, vendorId, isAvailable) => 
         throw new Error('Service not found');
     }
 
-    return await vendorServiceRepository.update(serviceId, {
-        is_available: Boolean(isAvailable)
+    const nextAvailability = Boolean(isAvailable);
+    if (nextAvailability && existingService.approval_status !== 'approved') {
+        throw createValidationError('Only approved services can be made available for users');
+    }
+
+    const service = await vendorServiceRepository.update(serviceId, {
+        is_available: nextAvailability
     }, 'id');
+
+    const vendor = await vendorRepository.findVendorDetails(vendorId);
+    const services = Array.isArray(vendor?.services) ? vendor.services : [];
+    const unavailableReason = authService.getVendorActivationBlockReason(vendor, services);
+
+    if (vendor?.is_available && unavailableReason) {
+        await vendorRepository.update(vendorId, { is_available: false }, 'vendor_id');
+    }
+
+    return service;
 };
 
 exports.getVendorAvailability = async (vendorId) => {
@@ -220,7 +235,7 @@ exports.updateVendorAvailability = async (vendorId, payload) => {
             const unavailableReason = authService.getVendorActivationBlockReason(vendor, services);
 
             if (unavailableReason) {
-                throw new Error(unavailableReason);
+                throw createValidationError(unavailableReason);
             }
         }
         updateData.is_available = nextAvailability;

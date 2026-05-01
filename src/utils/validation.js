@@ -4,6 +4,12 @@ function createValidationError(message) {
     return error;
 }
 
+function createConflictError(message) {
+    const error = new Error(message);
+    error.statusCode = 409;
+    return error;
+}
+
 function normalizeOptionalString(value, { lowercase = false } = {}) {
     if (value === undefined || value === null) {
         return null;
@@ -19,6 +25,46 @@ function normalizeOptionalString(value, { lowercase = false } = {}) {
 
 function isValidEmail(value) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+const EMPTY_OPTIONAL_VALUES = new Set(['', 'undefined', 'null']);
+
+function normalizeOptionalAgentCode(value) {
+    if (value === undefined || value === null) {
+        return null;
+    }
+
+    const normalized = String(value).trim();
+    if (EMPTY_OPTIONAL_VALUES.has(normalized.toLowerCase())) {
+        return null;
+    }
+
+    return normalized.toUpperCase();
+}
+
+function normalizeLatitudeLongitude(value, label) {
+    if (value === undefined || value === null || value === '') {
+        return null;
+    }
+
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) {
+        throw createValidationError(`${label} must be a valid number`);
+    }
+
+    return parsed;
+}
+
+function normalizeCategoryIds(categories) {
+    const rawCategories = Array.isArray(categories)
+        ? categories
+        : (categories === undefined || categories === null || categories === '' ? [] : [categories]);
+
+    const normalizedCategories = rawCategories
+        .map((categoryId) => Number.parseInt(categoryId, 10))
+        .filter((categoryId) => Number.isInteger(categoryId) && categoryId > 0);
+
+    return [...new Set(normalizedCategories)];
 }
 
 function validateAgentOnboardingInput(payload = {}) {
@@ -46,6 +92,58 @@ function validateAgentOnboardingInput(payload = {}) {
         full_name,
         mobile,
         email,
+    };
+}
+
+function validateVendorRegistrationInput(payload = {}) {
+    const full_name = normalizeOptionalString(payload.full_name);
+    const business_name = normalizeOptionalString(payload.business_name);
+    const mobile = normalizeOptionalString(payload.mobile);
+    const email = normalizeOptionalString(payload.email, { lowercase: true });
+    const whatsapp_number = normalizeOptionalString(payload.whatsapp_number) || mobile;
+    const description = normalizeOptionalString(payload.description);
+    const address = normalizeOptionalString(payload.address);
+    const latitude = normalizeLatitudeLongitude(payload.latitude, 'Latitude');
+    const longitude = normalizeLatitudeLongitude(payload.longitude, 'Longitude');
+    const agent_code = normalizeOptionalAgentCode(payload.agent_code);
+    const categories = normalizeCategoryIds(payload.categories);
+
+    if (!full_name) {
+        throw createValidationError('Owner name is required');
+    }
+
+    if (!business_name) {
+        throw createValidationError('Business name is required');
+    }
+
+    if (!mobile && !email) {
+        throw createValidationError('Mobile number or email is required');
+    }
+
+    if (mobile && !/^\d{10}$/.test(mobile)) {
+        throw createValidationError('Mobile number must be exactly 10 digits');
+    }
+
+    if (whatsapp_number && !/^\d{10}$/.test(whatsapp_number)) {
+        throw createValidationError('WhatsApp number must be exactly 10 digits');
+    }
+
+    if (email && !isValidEmail(email)) {
+        throw createValidationError('Please enter a valid email address');
+    }
+
+    return {
+        full_name,
+        business_name,
+        mobile,
+        email,
+        whatsapp_number,
+        description,
+        address,
+        latitude,
+        longitude,
+        agent_code,
+        categories,
     };
 }
 
@@ -156,8 +254,11 @@ function validateVendorServicePayload(payload = {}) {
 
 module.exports = {
     createValidationError,
+    createConflictError,
     normalizeOptionalString,
+    normalizeOptionalAgentCode,
     validateAgentOnboardingInput,
+    validateVendorRegistrationInput,
     validateUserProfileInput,
     validateVendorServicePayload,
     isValidEmail,

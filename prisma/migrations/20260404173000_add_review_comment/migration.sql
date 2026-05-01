@@ -1,2 +1,2 @@
 ALTER TABLE "reviews"
-ADD COLUMN "comment" TEXT;
+ADD COLUMN IF NOT EXISTS "comment" TEXT;

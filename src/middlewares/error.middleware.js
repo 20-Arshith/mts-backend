@@ -21,6 +21,20 @@ const errorHandler = (err, req, res, next) => {
         });
     }
 
+    if (err.code === 'P2003') {
+        return res.status(400).json({
+            success: false,
+            message: 'The selected related record does not exist.',
+        });
+    }
+
+    if (err.code === 'P2025') {
+        return res.status(404).json({
+            success: false,
+            message: 'Record not found.',
+        });
+    }
+
     const statusCode = err.code === 'LIMIT_FILE_SIZE' ? 400 : (err.statusCode || 500);
     const message = err.code === 'LIMIT_FILE_SIZE'
         ? 'Video file is too large. Maximum allowed size is 100MB.'

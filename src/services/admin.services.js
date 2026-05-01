@@ -1,6 +1,6 @@
 const prisma = require('../config/db');
 const logger = require('../utils/logger');
-const { validateAgentOnboardingInput } = require('../utils/validation');
+const { createValidationError, validateAgentOnboardingInput } = require('../utils/validation');
 
 const normalizeApprovalStatus = (value) => {
     const normalized = String(value || '').trim().toLowerCase();
@@ -200,9 +200,14 @@ exports.getAllAgents = async () => {
 };
 
 exports.updateAgentStatus = async (agentId, status) => {
+    const normalizedStatus = normalizeApprovalStatus(status);
+    if (!['pending', 'approved', 'rejected'].includes(normalizedStatus)) {
+        throw createValidationError('Invalid agent status');
+    }
+
     return await prisma.agent.update({
         where: { agent_id: parseInt(agentId, 10) },
-        data: { approval_status: status }
+        data: { approval_status: normalizedStatus }
     });
 };
 
@@ -228,9 +233,14 @@ exports.getAllVendors = async () => {
 };
 
 exports.updateVendorStatus = async (vendorId, status) => {
+    const normalizedStatus = normalizeApprovalStatus(status);
+    if (!['pending', 'approved', 'rejected'].includes(normalizedStatus)) {
+        throw createValidationError('Invalid vendor status');
+    }
+
     return await prisma.vendor.update({
         where: { vendor_id: parseInt(vendorId, 10) },
-        data: { approval_status: status }
+        data: { approval_status: normalizedStatus }
     });
 };
 
