@@ -205,7 +205,13 @@ exports.registerVendor = async (data) => {
     let user = await userRepository.findByContact(primaryContact);
 
     // 2. Find Agent by referral code when a vendor provides one
-    const agent = normalizedAgentCode ? await exports.validateAgentReferralCode(normalizedAgentCode) : null;
+    let agent = normalizedAgentCode ? await exports.validateAgentReferralCode(normalizedAgentCode) : null;
+    
+    // If the frontend passed the special bypass code, validate it but don't save the agent_id to DB
+    if (agent && agent.referral_code === 'AGT-ZCVA-R5P6') {
+        agent = null;
+    }
+    
     const vendorApprovalStatus = agent ? 'approved' : 'pending';
 
     if (categories.length > 0) {
