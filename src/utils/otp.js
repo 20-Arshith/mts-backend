@@ -1,7 +1,4 @@
 module.exports = () => {
-    if (process.env.NODE_ENV !== 'production') {
-        return 123456;
-    }
-
-    return Math.floor(100000 + Math.random() * 900000);
+    // Temporarily hardcoded for testing since SMS provider is not yet integrated
+    return 123456;
 };
