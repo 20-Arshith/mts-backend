@@ -14,13 +14,13 @@ exports.sendOtp = async (req, res, next) => {
             return res.status(400).json({ success: false, message: "Mobile number or email is required" });
         }
 
+        // vendor_registration = self-onboarding flow; skip all pre-OTP access checks
         if (actorType === 'vendor') {
             await authService.validateVendorAccess(contact);
-        }
-
-        if (actorType === 'agent') {
+        } else if (actorType === 'agent') {
             await authService.validateAgentAccess(contact);
         }
+        // 'vendor_registration' and other actorTypes skip access validation intentionally
 
         const otp = await authService.sendOtp(contact);
         res.status(200).json({
@@ -44,6 +44,17 @@ exports.verifyOtp = async (req, res, next) => {
         }
 
         await authService.verifyOtp(contact, otp);
+
+        // Vendor self-onboarding: verify OTP and signal that registration details are still needed.
+        // We intentionally skip the agent/user path to avoid creating a USER-role record
+        // that would interfere with the subsequent /auth/register-vendor call.
+        if (actorType === 'vendor_registration') {
+            return res.status(200).json({
+                success: true,
+                message: 'OTP verified. Please complete your registration.',
+                registrationRequired: true,
+            });
+        }
 
         if (actorType === 'vendor') {
             const vendor = await authService.validateVendorAccess(contact);
