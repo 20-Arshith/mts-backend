@@ -4,7 +4,7 @@ const { ROLES } = require('../utils/constants');
 const requireUserSession = (req) => {
     const userId = Number(req.user?.user_id);
 
-    if (req.user?.role_id !== ROLES.USER || !Number.isInteger(userId) || userId <= 0) {
+    if ((req.user?.role_id !== ROLES.USER && req.user?.role_id !== ROLES.VENDOR) || !Number.isInteger(userId) || userId <= 0) {
         const error = new Error('Please log in with a user account to continue');
         error.statusCode = 401;
         throw error;
@@ -26,6 +26,25 @@ exports.updateProfile = async (req, res, next) => {
     try {
         const updated = await userService.updateProfile(requireUserSession(req), req.body);
         res.status(200).json({ success: true, data: updated });
+    } catch (error) {
+        next(error);
+    }
+};
+
+exports.updatePushToken = async (req, res, next) => {
+    try {
+        const userId = Number(req.user?.user_id);
+        if (!userId) {
+            return res.status(401).json({ success: false, message: 'Unauthorized' });
+        }
+        
+        const { expo_push_token } = req.body;
+        // In order to avoid circular dependencies or bloating userService, we can directly call repository here
+        // or add it to userService. Let's add it to userService.
+        const userRepository = require('../repositories/user.repository');
+        await userRepository.updatePushToken(userId, expo_push_token);
+        
+        res.status(200).json({ success: true, message: 'Push token updated' });
     } catch (error) {
         next(error);
     }

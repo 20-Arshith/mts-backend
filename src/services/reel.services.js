@@ -85,6 +85,42 @@ exports.getVendorReels = async (vendorId, query = {}) => {
     };
 };
 
+exports.incrementViewCount = async (reelId) => {
+    const parsedReelId = parseInt(reelId, 10);
+
+    if (!Number.isInteger(parsedReelId) || parsedReelId <= 0) {
+        const error = new Error('Invalid reel id');
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const reel = await reelRepository.findById(parsedReelId);
+    if (!reel || reel.approval_status !== 'approved' || reel.status !== 'approved') {
+        const error = new Error('Reel not found');
+        error.statusCode = 404;
+        throw error;
+    }
+
+    return await reelRepository.incrementViewCount(parsedReelId);
+};
+
+exports.getReelStats = async (reelId) => {
+    const parsedReelId = parseInt(reelId, 10);
+    if (!Number.isInteger(parsedReelId) || parsedReelId <= 0) {
+        const error = new Error('Invalid reel id');
+        error.statusCode = 400;
+        throw error;
+    }
+    
+    const reel = await reelRepository.findById(parsedReelId);
+    if (!reel) {
+        const error = new Error('Reel not found');
+        error.statusCode = 404;
+        throw error;
+    }
+    return reel;
+};
+
 exports.deleteReel = async (reelId, vendorId) => {
     const reel = await reelRepository.findById(reelId, 'id');
     if (!reel || reel.vendor_id !== vendorId) {
